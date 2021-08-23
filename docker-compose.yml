@@ -1,0 +1,61 @@
+version: '3.4'
+services:
+  worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: &img worker
+    command: celery -A app worker -l 'info'
+    restart: 'no'
+    environment: &env
+      - BROKER_URL=amqp://admin:mypass@rabbitmq:5672
+      - RESULT_BACKEND=redis://redis:6379/0
+      - C_FORCE_ROOT=true
+    volumes:
+      - ./app:/app/
+    depends_on:
+      - rabbitmq
+      - redis
+
+  worker-minio:
+    build: .
+    image: *img
+    command: celery -A app worker -l 'info'
+    environment: *env
+    depends_on:
+      - beat
+      - rabbitmq
+    restart: 'no'
+    volumes:
+      - ./app:/app
+
+  beat:
+    build: .
+    image: *img
+    command: celery -A app beat -l INFO
+    environment: *env
+    depends_on:
+      - rabbitmq
+    restart: 'no'
+    volumes:
+      - ./app:/app
+
+  rabbitmq:
+    image: rabbitmq
+    ports:
+      - "5672:5672"
+    environment:
+      - RABBITMQ_DEFAULT_USER=admin
+      - RABBITMQ_DEFAULT_PASS=mypass
+  redis:
+    image: redis
+    ports:
+      - "6379:6379"
+  flower:
+    image: mher/flower
+    environment:
+      - CELERY_BROKER_URL=amqp://admin:mypass@rabbitmq:5672
+      - FLOWER_PORT=8888
+    ports:
+      - 8888:8888
+
